@@ -74,6 +74,24 @@ class TestParseTraceMoe(unittest.TestCase):
         self.assertEqual(out[0]["title_romaji"], "")
 
 
+class TestAnimeTraceModelChain(unittest.TestCase):
+    def test_chain_default(self):
+        chain = image_api.anime_trace_model_chain()
+        self.assertEqual(chain[0], "anime")
+        self.assertIn("pre_stable", chain)
+        self.assertIn("anime_model_lovelive", chain)
+
+    def test_chain_preferred_first_dedup(self):
+        chain = image_api.anime_trace_model_chain("pre_stable")
+        self.assertEqual(chain[0], "pre_stable")
+        self.assertNotIn("pre_stable", chain[1:])
+        self.assertIn("anime", chain)
+
+    def test_no_duplicates(self):
+        chain = image_api.anime_trace_model_chain("anime_model_lovelive")
+        self.assertEqual(len(chain), len(set(chain)))
+
+
 class TestParseAnimeTrace(unittest.TestCase):
     """基于 2026-09 实测返回结构：data[].character[] 列表 + not_confident 标记。"""
 
@@ -100,8 +118,9 @@ class TestParseAnimeTrace(unittest.TestCase):
                 },
             ],
         }
-        out = image_api.parse_anime_trace(data)
+        out = image_api.parse_anime_trace(data, model="anime")
         self.assertEqual(len(out), 3)
+        self.assertEqual(out[0]["model"], "anime")
         self.assertEqual(out[0]["character"], "天々座理世")
         self.assertEqual(out[0]["anime"], "ご注文はうさぎですか？")
         self.assertTrue(out[0]["confident"])

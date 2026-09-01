@@ -31,6 +31,10 @@ TRACE_MOE_ENDPOINT = "https://api.trace.moe/search"
 ANIME_TRACE_ENDPOINT = "https://api.animetrace.com/v1/search"
 SAUCENAO_ENDPOINT = "https://saucenao.com/search.php"
 
+# AnimeTrace 模型降级链：优先用配置/默认模型，服务端临时停用(如 anime 模型
+# 曾返回 code=17737「本模型临时停止访问中」)时依次尝试后续可用模型
+ANIME_TRACE_MODEL_FALLBACK = ("anime", "pre_stable", "anime_model_lovelive")
+
 _HTTP_PREFIX = ("http://", "https://")
 _TIMEOUT = 20
 
@@ -134,37 +138,62 @@ def parse_trace_moe(data: Any) -> list[dict]:
 # ---------------------------------------------------------------------------
 # AnimeTrace —— 识角色
 # ---------------------------------------------------------------------------
+def anime_trace_model_chain(preferred: str = "anime") -> list[str]:
+    """返回模型尝试顺序：首选 + 降级链（去重、保持顺序）。"""
+    chain = [preferred]
+    for model in ANIME_TRACE_MODEL_FALLBACK:
+        if model not in chain:
+            chain.append(model)
+    return chain
+
+
+async def _anime_trace_post(
+    session: Any,
+    image: Any,
+    model: str,
+    ai_detect: bool,
+) -> tuple[dict | None, str | None]:
+    """请求 AnimeTrace 一次；返回 (data, 错误消息)，成功时错误消息为 None。"""
+    params: dict[str, Any] = {"model": model}
+    if ai_detect:
+        params["ai_detect"] = "1"
+    data: Any = None
+    try:
+        async with session.post(
+            ANIME_TRACE_ENDPOINT,
+            params=params,
+            json={"url": image} if is_url(image) else None,
+            data=None if is_url(image) else {"file": image},
+        ) as resp:
+            data = await resp.json(content_type=None)
+    except Exception as exc:  # noqa: BLE001 - 网络层失败计入降级链
+        return None, str(exc)
+    if isinstance(data, dict) and data.get("code") not in (0, 200, None) and data.get("data") == {}:
+        msg = data.get("zh_message") or data.get("message") or f"code={data.get('code')}"
+        return None, str(msg)
+    return data, None
+
+
 async def anime_trace_search(
     image: Any,
     timeout: int = _TIMEOUT,
     model: str = "anime",
     ai_detect: bool = False,
 ) -> list[dict]:
-    params: dict[str, Any] = {"model": model}
-    if ai_detect:
-        params["ai_detect"] = "1"
-
+    """识别角色；模型不可用时沿降级链自动换模型，全部失败抛 RuntimeError。"""
+    errors: list[str] = []
     async with aiohttp.ClientSession(
         timeout=aiohttp.ClientTimeout(total=timeout), headers=DEFAULT_HEADERS
     ) as session:
-        if is_url(image):
-            payload: dict[str, Any] = {"url": image}
-            payload.update(params)
-            async with session.post(ANIME_TRACE_ENDPOINT, json=payload) as resp:
-                data = await resp.json(content_type=None)
-        else:
-            async with session.post(
-                ANIME_TRACE_ENDPOINT, params=params, data={"file": image}
-            ) as resp:
-                data = await resp.json(content_type=None)
-    if isinstance(data, dict) and data.get("code") not in (0, 200, None) and data.get("data") == {}:
-        # 服务端显式错误（如模型临时停用/超限）：把中文消息抛给上层做针对性提示
-        msg = data.get("zh_message") or data.get("message") or f"AnimeTrace 返回错误 code={data.get('code')}"
-        raise RuntimeError(f"AnimeTrace 服务异常：{msg}")
-    return parse_anime_trace(data)
+        for candidate in anime_trace_model_chain(model):
+            data, err = await _anime_trace_post(session, image, candidate, ai_detect)
+            if data is not None:
+                return parse_anime_trace(data, model=candidate)
+            errors.append(f"{candidate}: {err}")
+    raise RuntimeError(f"AnimeTrace 所有模型均不可用：{' | '.join(errors)}")
 
 
-def parse_anime_trace(data: Any) -> list[dict]:
+def parse_anime_trace(data: Any, model: str = "") -> list[dict]:
     """解析 AnimeTrace 返回（实测结构，2026-09 验证）。
 
     真实返回样例：
@@ -196,6 +225,7 @@ def parse_anime_trace(data: Any) -> list[dict]:
                     continue
                 out.append({
                     "engine": "anime_trace",
+                    "model": model,
                     "character": str(c.get("character") or c.get("name") or ""),
                     "anime": str(c.get("work") or c.get("anime") or c.get("作品") or ""),
                     "confident": conf,
