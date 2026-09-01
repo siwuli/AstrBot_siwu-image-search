@@ -191,27 +191,39 @@ class ImageSearchPlugin(star.Star):
             logger.error(f"[image_search] AnimeTrace failed: {exc}")
             yield "识图服务暂时不可用，请稍后再试（AnimeTrace 请求失败）。"
             return
-        threshold = float(self._cfg("img_char_similarity", 0.5) or 0)
         max_results = max(1, min(5, int(self._cfg("img_search_max_results", 3) or 3)))
-        hits = [r for r in results if (r["score"] or 0) >= threshold][:max_results]
+        confident = [r for r in results if r.get("confident")]
+        hits = confident[:max_results]
+        ai_flag = ""
+        if results and any(r.get("ai") for r in results):
+            ai_flag = "（提示：该图片疑似 AI 生成）"
+        if not hits and confident:
+            yield f"识别到 {len(confident)} 个角色：{ai_flag}\n" + "\n".join(
+                f"{i}. {h['character'] or '未知角色'} —— {h['anime'] or '未知作品'}"
+                for i, h in enumerate(confident[:max_results], 1)
+            )
+            return
         if not hits:
-            top = results[0] if results else None
-            hint = ""
-            if top:
-                hint = (
-                    f"最高置信度 {top['score']:.2f} 低于阈值 {threshold:.2f}，"
-                    f"参考候选：{top['character'] or '未知'}"
+            unsure = [r for r in results if not r.get("confident")]
+            if unsure:
+                yield "识别结果不确定（API 标记 not_confident），可能是画面模糊、人物过小或遮挡；建议换一张更清晰的图。" + "\n" + (
+                    "\n".join(
+                        f"候选：{h['character'] or '未知'} —— {h['anime'] or '未知作品'}"
+                        for h in unsure[:max_results]
+                    )
+                    or ""
                 )
-            yield f"未能可靠识别图中角色。{hint}"
+            else:
+                yield "未能识别图中角色（API 无匹配结果）。"
             return
         lines = [
-            f"来源：{self._src_label(source)}；引擎：AnimeTrace",
+            f"来源：{self._src_label(source)}；引擎：AnimeTrace{ai_flag}",
             f"识别到 {len(hits)} 条候选：",
         ]
         for i, hit in enumerate(hits, 1):
             char = hit["character"] or "未知角色"
             anime = hit["anime"] or "未知作品"
-            lines.append(f"{i}. {char} —— {anime}（置信度 {hit['score']:.2f}）")
+            lines.append(f"{i}. {char} —— {anime}")
         yield "\n".join(lines)
 
     # ------------------------------------------------------------------
@@ -322,9 +334,9 @@ class ImageSearchPlugin(star.Star):
         try:
             if kind == "character":
                 results = await anime_trace_search(url)
-                threshold = float(self._cfg("img_char_similarity", 0.5) or 0)
+                threshold = 0.0
                 label = "角色识别"
-                fmt = lambda h: f"{h['character'] or '未知角色'} —— {h['anime'] or '未知作品'}（置信度 {h['score']:.2f}）"
+                fmt = lambda h: f"{h['character'] or '未知角色'} —— {h['anime'] or '未知作品'}"
             elif kind == "source":
                 api_key = str(self._cfg("img_search_saucenao_key", "") or "").strip() or None
                 results = await saucenao_search(url, api_key=api_key)
@@ -346,7 +358,10 @@ class ImageSearchPlugin(star.Star):
             yield event.make_result().message("识图服务暂时不可用，请稍后再试。")
             return
         max_results = max(1, min(5, int(self._cfg("img_search_max_results", 3) or 3)))
-        hits = [r for r in results if (r.get("similarity") if kind != "character" else r["score"]) >= threshold][:max_results]
+        if kind == "character":
+            hits = [r for r in results if r.get("confident")][:max_results]
+        else:
+            hits = [r for r in results if (r.get("similarity") or 0) >= threshold][:max_results]
         if not hits:
             yield event.make_result().message(f"{label}未找到可信匹配（来源：{self._src_label(source)}）。")
             return

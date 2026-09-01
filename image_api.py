@@ -34,6 +34,12 @@ SAUCENAO_ENDPOINT = "https://saucenao.com/search.php"
 _HTTP_PREFIX = ("http://", "https://")
 _TIMEOUT = 20
 
+# 三个引擎（尤其 AnimeTrace/Cloudflare 与 SauceNAO）对无 UA 或库默认 UA 的请求
+# 会拒绝/重置/超时，统一带浏览器风格 UA
+DEFAULT_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AstrBot-image-search/0.1.0",
+}
+
 
 def is_url(value: Any) -> bool:
     return isinstance(value, str) and value.startswith(_HTTP_PREFIX)
@@ -49,7 +55,7 @@ async def download_image(url: str, timeout: int = _TIMEOUT) -> bytes | None:
     _require_aiohttp()
     try:
         async with aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=timeout)
+            timeout=aiohttp.ClientTimeout(total=timeout), headers=DEFAULT_HEADERS
         ) as session, session.get(url) as resp:
             if resp.status == 200:
                 return await resp.read()
@@ -69,7 +75,9 @@ async def trace_moe_search(
     anilist_info: bool = True,
     cut_borders: bool = True,
 ) -> list[dict]:
-    headers = {"x-trace-key": api_key} if api_key else None
+    headers = dict(DEFAULT_HEADERS)
+    if api_key:
+        headers["x-trace-key"] = api_key
     params: dict[str, Any] = {}
     if anilist_info:
         params["anilistInfo"] = ""
@@ -77,7 +85,7 @@ async def trace_moe_search(
         params["cutBorders"] = "true"
 
     async with aiohttp.ClientSession(
-        timeout=aiohttp.ClientTimeout(total=timeout)
+        timeout=aiohttp.ClientTimeout(total=timeout), headers=headers
     ) as session:
         if is_url(image):
             params["url"] = image
@@ -137,7 +145,7 @@ async def anime_trace_search(
         params["ai_detect"] = "1"
 
     async with aiohttp.ClientSession(
-        timeout=aiohttp.ClientTimeout(total=timeout)
+        timeout=aiohttp.ClientTimeout(total=timeout), headers=DEFAULT_HEADERS
     ) as session:
         if is_url(image):
             payload: dict[str, Any] = {"url": image}
@@ -153,29 +161,45 @@ async def anime_trace_search(
 
 
 def parse_anime_trace(data: Any) -> list[dict]:
-    """解析 AnimeTrace 返回：按置信度降序输出候选列表。"""
+    """解析 AnimeTrace 返回（实测结构，2026-09 验证）。
+
+    真实返回样例：
+        {"code": 0, "ai": false, "trace_id": "...",
+         "data": [{"box": [...], "box_id": "...", "not_confident": false,
+                   "character": [{"work": "作品名", "character": "角色名"}, ...]}]}
+
+    注意：
+    - 每个 data 条目是一个「检测到的人物框」，可包含多个角色候选 character[];
+    - API 不返回置信度分数，只提供 not_confident 布尔标记（false=可信）；
+    - code 0/200 表示成功；上限次数或失败时 data 可能是空/错误说明。
+    """
     out: list[dict] = []
     if not isinstance(data, dict):
         return out
     raw = data.get("data")
-    if isinstance(raw, list):
-        for item in raw:
-            if not isinstance(item, dict):
-                continue
-            try:
-                score = float(item.get("score") or item.get("confidence") or 0)
-            except (TypeError, ValueError):
-                score = 0.0
-            out.append({
-                "engine": "anime_trace",
-                "character": str(item.get("key") or item.get("name") or ""),
-                "anime": str(item.get("anime") or item.get("anime_name") or ""),
-                "anime_id": item.get("anime_id"),
-                "score": score,
-                "time": item.get("time"),
-                "ai_detect": item.get("ai_detect"),
-            })
-    out.sort(key=lambda x: -(x["score"] or 0))
+    if not isinstance(raw, list):
+        return out
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        chars = item.get("character")
+        conf = not bool(item.get("not_confident"))
+        if isinstance(chars, dict):
+            chars = [chars]
+        if isinstance(chars, list):
+            for c in chars:
+                if not isinstance(c, dict):
+                    continue
+                out.append({
+                    "engine": "anime_trace",
+                    "character": str(c.get("character") or c.get("name") or ""),
+                    "anime": str(c.get("work") or c.get("anime") or c.get("作品") or ""),
+                    "confident": conf,
+                    "ai": bool(item.get("ai")),
+                    "trace_id": data.get("trace_id"),
+                })
+    # 可信候选在前，输入顺序保持（API 已按检测置信排序）
+    out.sort(key=lambda x: (0 if x["confident"] else 1))
     return out
 
 

@@ -17,12 +17,6 @@
     "type": "float",
     "default": 0.82
   },
-  "img_char_similarity": {
-    "description": "AnimeTrace 置信度阈值",
-    "hint": "角色识别低于该置信度(0~1)视为未命中",
-    "type": "float",
-    "default": 0.5
-  },
   "img_sauce_similarity": {
     "description": "SauceNAO 相似度阈值",
     "hint": "找原图低于该相似度(0~100)视为未命中",

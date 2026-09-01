@@ -51,14 +51,12 @@ class TestParseTraceMoe(unittest.TestCase):
         }
         out = image_api.parse_trace_moe(data)
         self.assertEqual(len(out), 2)
-        # 按相似度降序
         self.assertEqual(out[0]["title_zh"], "孤独摇滚！")
         self.assertEqual(out[0]["title_romaji"], "Bocchi the Rock!")
         self.assertEqual(out[0]["episode"], 1)
         self.assertEqual(out[0]["from_sec"], 183.03)
         self.assertEqual(out[0]["preview_image"], "https://media.trace.moe/image/x.png")
         self.assertGreater(out[0]["similarity"], out[1]["similarity"])
-        # 无中文标题时兜底
         self.assertEqual(out[1]["title_zh"], "")
         self.assertEqual(out[1]["title_romaji"], "Another Anime")
 
@@ -77,28 +75,55 @@ class TestParseTraceMoe(unittest.TestCase):
 
 
 class TestParseAnimeTrace(unittest.TestCase):
+    """基于 2026-09 实测返回结构：data[].character[] 列表 + not_confident 标记。"""
+
     def test_parse_basic(self):
         data = {
-            "code": 200,
-            "trace_id": "abc",
+            "code": 0,
+            "ai": False,
+            "trace_id": "abc123",
             "data": [
-                {"key": "阿米娅", "anime": "明日方舟", "anime_id": 123, "score": 0.93, "time": "0:12"},
-                {"key": "德克萨斯", "anime": "明日方舟", "anime_id": 123, "score": 0.71},
-                {"key": "未知角色", "anime": "", "score": 0.15},
+                {
+                    "box": [0.1, 0.2, 0.3, 0.4],
+                    "box_id": "b1",
+                    "not_confident": False,
+                    "character": [
+                        {"work": "ご注文はうさぎですか？", "character": "天々座理世"},
+                        {"work": "ご注文はうさぎですか？", "character": "香風ターニャ"},
+                    ],
+                },
+                {
+                    "box": [0.5, 0.6, 0.7, 0.8],
+                    "box_id": "b2",
+                    "not_confident": True,
+                    "character": [{"work": "未知作品", "character": "模糊角色"}],
+                },
             ],
         }
         out = image_api.parse_anime_trace(data)
         self.assertEqual(len(out), 3)
-        self.assertEqual(out[0]["character"], "阿米娅")
-        self.assertEqual(out[0]["anime"], "明日方舟")
-        self.assertGreater(out[0]["score"], out[1]["score"])
-        self.assertEqual(out[2]["anime"], "")
+        self.assertEqual(out[0]["character"], "天々座理世")
+        self.assertEqual(out[0]["anime"], "ご注文はうさぎですか？")
+        self.assertTrue(out[0]["confident"])
+        self.assertEqual(out[1]["character"], "香風ターニャ")
+        self.assertTrue(out[0]["confident"] and out[1]["confident"])
+        self.assertFalse(out[2]["confident"])
+        self.assertEqual(out[2]["character"], "模糊角色")
 
-    def test_parse_garbage(self):
+    def test_parse_single_dict_character(self):
+        data = {"code": 0, "data": [{"not_confident": False, "character": {"work": "W", "character": "C"}}]}
+        out = image_api.parse_anime_trace(data)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["anime"], "W")
+        self.assertEqual(out[0]["character"], "C")
+
+    def test_parse_empty(self):
         self.assertEqual(image_api.parse_anime_trace(None), [])
+        self.assertEqual(image_api.parse_anime_trace({}), [])
         self.assertEqual(image_api.parse_anime_trace({"data": {}}), [])
         self.assertEqual(image_api.parse_anime_trace({"data": "x"}), [])
         self.assertEqual(image_api.parse_anime_trace({"data": [None, 1]}), [])
+        self.assertEqual(image_api.parse_anime_trace({"data": [{"character": "notlist"}]}), [])
 
 
 class TestParseSaucenao(unittest.TestCase):
