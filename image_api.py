@@ -157,6 +157,10 @@ async def anime_trace_search(
                 ANIME_TRACE_ENDPOINT, params=params, data={"file": image}
             ) as resp:
                 data = await resp.json(content_type=None)
+    if isinstance(data, dict) and data.get("code") not in (0, 200, None) and data.get("data") == {}:
+        # 服务端显式错误（如模型临时停用/超限）：把中文消息抛给上层做针对性提示
+        msg = data.get("zh_message") or data.get("message") or f"AnimeTrace 返回错误 code={data.get('code')}"
+        raise RuntimeError(f"AnimeTrace 服务异常：{msg}")
     return parse_anime_trace(data)
 
 

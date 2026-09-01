@@ -189,7 +189,7 @@ class ImageSearchPlugin(star.Star):
             results = await anime_trace_search(url)
         except Exception as exc:  # noqa: BLE001
             logger.error(f"[image_search] AnimeTrace failed: {exc}")
-            yield "识图服务暂时不可用，请稍后再试（AnimeTrace 请求失败）。"
+            yield f"角色识别服务暂时不可用：{exc}"
             return
         max_results = max(1, min(5, int(self._cfg("img_search_max_results", 3) or 3)))
         confident = [r for r in results if r.get("confident")]
@@ -355,7 +355,7 @@ class ImageSearchPlugin(star.Star):
                 )
         except Exception as exc:  # noqa: BLE001
             logger.error(f"[image_search] {kind} search failed: {exc}")
-            yield event.make_result().message("识图服务暂时不可用，请稍后再试。")
+            yield event.make_result().message(f"识图服务暂时不可用：{exc}")
             return
         max_results = max(1, min(5, int(self._cfg("img_search_max_results", 3) or 3)))
         if kind == "character":
