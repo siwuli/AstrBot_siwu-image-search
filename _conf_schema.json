@@ -1,0 +1,50 @@
+{
+  "img_search_enabled": {
+    "description": "启用动漫识图",
+    "hint": "关闭后识图工具与命令不再响应",
+    "type": "bool",
+    "default": true
+  },
+  "img_search_max_results": {
+    "description": "返回最多结果数",
+    "hint": "每个引擎最多返回的候选条数（1~5）",
+    "type": "int",
+    "default": 3
+  },
+  "img_trace_similarity": {
+    "description": "trace.moe 相似度阈值",
+    "hint": "截图找番低于该相似度(0~1)视为未命中",
+    "type": "float",
+    "default": 0.82
+  },
+  "img_char_similarity": {
+    "description": "AnimeTrace 置信度阈值",
+    "hint": "角色识别低于该置信度(0~1)视为未命中",
+    "type": "float",
+    "default": 0.5
+  },
+  "img_sauce_similarity": {
+    "description": "SauceNAO 相似度阈值",
+    "hint": "找原图低于该相似度(0~100)视为未命中",
+    "type": "int",
+    "default": 55
+  },
+  "img_search_recent_window": {
+    "description": "最近图片匹配时间窗（分钟）",
+    "hint": "先发图后发文字时，匹配该会话最近多少分钟内的图片；0 关闭",
+    "type": "int",
+    "default": 10
+  },
+  "img_search_saucenao_key": {
+    "description": "SauceNAO API Key（可选）",
+    "hint": "不填也能用但限流较严；注册 saucenao.com 免费获取",
+    "type": "string",
+    "default": ""
+  },
+  "img_search_preview": {
+    "description": "直发命中预览图",
+    "hint": "trace.moe 命中时是否直发场景预览图（需平台支持发图）",
+    "type": "bool",
+    "default": true
+  }
+}
