@@ -9,7 +9,7 @@ AstrBot 识图插件，**三引擎合一、以 LLM 工具路由**：不做"猜�
 | `siwu_img_find_character` | [AnimeTrace](https://ai.animedb.cn) | 「图里这个角色是谁 / 出自哪个作品」——角色识别 |
 | `siwu_img_find_source` | [SauceNAO](https://saucenao.com) | 「原图 / 画师 / pixiv 链接」——插画原作溯源 |
 
-> 插件 id：`image_search`　当前版本：`0.1.3`　适用 AstrBot `>=4.0.0`
+> 插件 id：`image_search`　当前版本：`0.1.4`　适用 AstrBot `>=4.0.0`
 
 ## 智能取图（手机端图文分发的真实场景）
 
