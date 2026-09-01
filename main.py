@@ -31,12 +31,12 @@ from astrbot.api.event.filter import CustomFilter
 from astrbot.api.message_components import Image as ComponentImage
 from astrbot.api.provider import ProviderRequest
 
-from image_api import (
+from .image_api import (
     anime_trace_search,
     saucenao_search,
     trace_moe_search,
 )
-from image_source import (
+from .image_source import (
     RecentImageCache,
     record_event_images,
     resolve_image,
