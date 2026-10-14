@@ -1,9 +1,9 @@
 name: image_search
 display_name: 动漫识图
 short_desc: "兔兔识图三合一：trace.moe 找番 / AnimeTrace 识角色 / SauceNAO 找原图画师，LLM 自动路由引擎"
-desc: "兔兔识图三合一：trace.moe 截图找番（哪部番/第几集/第几秒）、AnimeTrace 识别动漫角色、SauceNAO 找原图与画师来源。拆分为三个 Agent 工具由 LLM 按用户提问自动路由；智能取图支持图文混发、引用回复图片、以及先发图后发文字的会话内最近图片；中文标题优先展示、相似度阈值过滤、多语言标题兜底"
+desc: "动漫识图：trace.moe 找番、AnimeTrace 识角色、SauceNAO 找原图与画师，LLM 自动路由"
 help: "发一张动漫截图问兔兔「这是什么番/哪一集」，发角色图问「这个角色是谁」，发美图问「原图/画师是谁」即可自动触发对应识图工具"
-version: 0.1.4
+version: 0.1.5
 author: siwuli
 repo: https://github.com/siwuli/AstrBot_siwu-image-search
 astrbot_version: ">=4.0.0"
